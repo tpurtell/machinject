@@ -41,6 +41,27 @@ typedef void* (*pfn_dlopen)(const char*, unsigned int);
 typedef int (*pfn_pthread_attr_setschedparam)(pthread_attr_t *attr, const struct sched_param *param);
 typedef void (*pfn_pthread_exit)(void* data);
 
+#ifdef __LP64__
+typedef unsigned long long              pointer_as_int;
+#define MACH_THREAD_SELF                ((pfn_mach_thread_self)0x0101010101010101LL)
+#define THREAD_TERMINATE                ((pfn_thread_terminate)0x0202020202020202LL)
+#define PTHREAD_SET_SELF                ((pfn_pthread_set_self)0x0303030303030303LL)
+#define PTHREAD_ATTR_INIT               ((pfn_pthread_attr_init)0x0404040404040404LL)
+#define PTHREAD_ATTR_GETSCHEDPOLICY     ((pfn_pthread_attr_getschedpolicy)0x0505050505050505LL)
+#define PTHREAD_ATTR_SETDETACHSTATE     ((pfn_pthread_attr_setdetachstate)0x0606060606060606LL)
+#define PTHREAD_ATTR_SETINHERITSCHED    ((pfn_pthread_attr_setinheritsched)0x0707070707070707LL)
+#define PTHREAD_CREATE                  ((pfn_pthread_create)0x0808080808080808LL)
+#define PTHREAD_ATTR_DESTROY            ((pfn_pthread_attr_destroy)0x0909090909090909LL)
+#define SCHED_GET_PRIORITY_MAX          ((pfn_sched_get_priority_max)0x0a0a0a0a0a0a0a0aLL)
+#define DLOPEN                          ((pfn_dlopen)0x0b0b0b0b0b0b0b0bLL)
+#define PTHREAD_ATTR_SETSCHEDPARAM      ((pfn_pthread_attr_setschedparam)0x0c0c0c0c0c0c0c0cLL)
+#define PTHREAD_EXIT                    ((pfn_pthread_exit)0x0d0d0d0d0d0d0d0dLL)
+
+#define PTHREAD_STRUCT                  ((char*)0xf0f0f0f0f0f0f0f0LL)        
+#define LIBRARY_STRING                  ((char*)0xf1f1f1f1f1f1f1f1LL)    
+#define LOADER_FUNCTION                 ((thread_func)0xf2f2f2f2f2f2f2f2LL)
+#else
+typedef unsigned int                    pointer_as_int;
 #define MACH_THREAD_SELF                ((pfn_mach_thread_self)0x01010101)
 #define THREAD_TERMINATE                ((pfn_thread_terminate)0x02020202)
 #define PTHREAD_SET_SELF                ((pfn_pthread_set_self)0x03030303)
@@ -58,6 +79,8 @@ typedef void (*pfn_pthread_exit)(void* data);
 #define PTHREAD_STRUCT                  ((char*)0xf0f0f0f0)        
 #define LIBRARY_STRING                  ((char*)0xf1f1f1f1)    
 #define LOADER_FUNCTION                 ((thread_func)0xf2f2f2f2)
+#endif
+
 #endif
 
 void* spawn_loader(char* library)
@@ -86,13 +109,13 @@ void injected_thread() {
     asm volatile (".byte 0xFF; .byte 0xFF; .byte 0xFF; .byte 0xFF");
 }
 using namespace std;
-unsigned int find_dword(vector<unsigned char>& data, unsigned int find)
+pointer_as_int find_pointer(vector<unsigned char>& data, pointer_as_int find)
 {
-    if(data.size() < sizeof(unsigned int))
-        return 0xffffffff;
+    if(data.size() < sizeof(pointer_as_int))
+        return ~(pointer_as_int)0;
     for(vector<unsigned char>::iterator i = data.begin(); i != data.end(); i++)
     {
-        if(*(unsigned int*)&*i == find)
+        if(*(pointer_as_int*)&*i == find)
             return i - data.begin();
     }
 }
@@ -108,15 +131,20 @@ void print_symbol_rewrites(const char* table_name)
     patches.push_back(make_pair((void*)PTHREAD_ATTR_SETDETACHSTATE, "pthread_attr_setdetachstate"));
     patches.push_back(make_pair((void*)PTHREAD_ATTR_SETINHERITSCHED, "pthread_attr_setinheritsched"));
     patches.push_back(make_pair((void*)PTHREAD_CREATE, "pthread_create"));
-    patches.push_back(make_pair((void*)PTHREAD_ATTR_DESTROY, "pthread_attr_destroy"));
+    patches.push_back(make_pair((void*)PTHREAD_ATTR_DESTROY, "pthread_attr_setinheritscheddestroy"));
     patches.push_back(make_pair((void*)SCHED_GET_PRIORITY_MAX, "sched_get_priority_max"));
     patches.push_back(make_pair((void*)DLOPEN, "dlopen"));
     patches.push_back(make_pair((void*)PTHREAD_ATTR_SETSCHEDPARAM, "pthread_attr_setschedparam"));
     patches.push_back(make_pair((void*)PTHREAD_EXIT, "pthread_exit"));    
 
     cout << "struct symbol_rewrite " << table_name << "[] = {" << endl;
-    for(vector<pair<void*, const char*> >::const_iterator i = patches.begin(); i != patches.end(); i++)
-        cout << "    " << "{ " << i->first << ", \"" << i->second << "\" }," << endl;
+    for(vector<pair<void*, const char*> >::const_iterator i = patches.begin(); i != patches.end(); i++) {
+        #ifdef __LP64__
+            cout << "    " << "{ " << i->first << ", \"" << i->second << "\" }," << endl;
+        #else
+            cout << "    " << "{ " << i->first << "LL, \"" << i->second << "\" }," << endl;
+        #endif
+    }
     cout << "    " << "{ " << 0 << ", NULL }," << endl;
     cout << "};" << endl;
 }
@@ -158,9 +186,9 @@ int main() {
     vector<unsigned char> injected_thread_data(injected_thread_bytes, &injected_thread_bytes[injected_thread_end_offset]);
     print_array(injected_thread_data, "injected_thread", 8);
     cout << endl;
-    cout << "const unsigned int INJECTED_THREAD_OFFSET_OF_PTHREAD_STRUCT = " << find_dword(injected_thread_data, (unsigned int)PTHREAD_STRUCT) << ";" << endl;
-    cout << "const unsigned int INJECTED_THREAD_OFFSET_OF_LIBRARY_STRING = " << find_dword(injected_thread_data, (unsigned int)LIBRARY_STRING) << ";" << endl;
-    cout << "const unsigned int INJECTED_THREAD_OFFSET_OF_LOADER_FUNCTION = " << find_dword(injected_thread_data, (unsigned int)LOADER_FUNCTION) << ";" << endl;
+    cout << "const unsigned int INJECTED_THREAD_OFFSET_OF_PTHREAD_STRUCT = " << find_pointer(injected_thread_data, (pointer_as_int)PTHREAD_STRUCT) << ";" << endl;
+    cout << "const unsigned int INJECTED_THREAD_OFFSET_OF_LIBRARY_STRING = " << find_pointer(injected_thread_data, (pointer_as_int)LIBRARY_STRING) << ";" << endl;
+    cout << "const unsigned int INJECTED_THREAD_OFFSET_OF_LOADER_FUNCTION = " << find_pointer(injected_thread_data, (pointer_as_int)LOADER_FUNCTION) << ";" << endl;
     cout << endl;
 #endif
     return 0;

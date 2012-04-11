@@ -5,20 +5,25 @@
 #include <sstream>
 #include <stdexcept>
 #include <dlfcn.h>
+#ifdef __LP64__
+typedef unsigned long long pointer_as_int;
+#else
+typedef unsigned int pointer_as_int;
+#endif
 struct symbol_rewrite {
-    unsigned int match;
+    pointer_as_int match;
     const char* symbol;
 };
 
 #include "inject.inc"
 
-void patch_dword(unsigned char* begin, unsigned char* end, unsigned int from, unsigned int to)
+void patch_pointer(unsigned char* begin, unsigned char* end, pointer_as_int from, pointer_as_int to)
 {
-    if(end - begin < sizeof(unsigned int))
+    if(end - begin < sizeof(pointer_as_int))
         return;
     for(unsigned char* i = begin; i != end; i++)
-        if(*(unsigned int*)i == from)
-            *(unsigned int*)i = to;
+        if(*(pointer_as_int*)i == from)
+            *(pointer_as_int*)i = to;
 }
 
 using namespace std;
@@ -66,8 +71,8 @@ int main(int argc, char** argv)
         for(int i = 0; symbol_map[i].symbol; i++)
         {
             void* address = dlsym(RTLD_DEFAULT, symbol_map[i].symbol);
-            patch_dword(spawn_loader, &spawn_loader[sizeof(spawn_loader)], symbol_map[i].match, (unsigned int)address);
-            patch_dword(injected_thread, &injected_thread[sizeof(injected_thread)], symbol_map[i].match, (unsigned int)address);
+            patch_pointer(spawn_loader, &spawn_loader[sizeof(spawn_loader)], symbol_map[i].match, (pointer_as_int)address);
+            patch_pointer(injected_thread, &injected_thread[sizeof(injected_thread)], symbol_map[i].match, (pointer_as_int)address);
         }
 
         r = vm_allocate(remote_task, &spawn_loader_address, sizeof(spawn_loader), TRUE);
@@ -90,6 +95,17 @@ int main(int argc, char** argv)
         // r = vm_write(remote_task, stack_address, (vm_offset_t), stack_length);
         // if(r) throw runtime_error("failed to write stack");
 
+        #ifdef __LP64__
+        x86_thread_state64_t state;
+        memset(&state, 0, sizeof(state));
+        r = thread_get_state(remote_thread, x86_THREAD_STATE64, (natural_t*)&state, &state_size);
+        if(r) throw runtime_error("failed to get thread state");
+        state.__rip = injected_thread_address;
+        state.__rsp = stack_address + stack_length;
+        //state.gs = 0; //tls
+        r = thread_set_state(remote_thread, x86_THREAD_STATE64, (natural_t*)&state, x86_THREAD_STATE64_COUNT);
+        if(r) throw runtime_error("failed to set thread state");
+        #else
         x86_thread_state32_t state;
         memset(&state, 0, sizeof(state));
         r = thread_get_state(remote_thread, x86_THREAD_STATE32, (natural_t*)&state, &state_size);
@@ -99,6 +115,7 @@ int main(int argc, char** argv)
         //state.gs = 0; //tls
         r = thread_set_state(remote_thread, x86_THREAD_STATE32, (natural_t*)&state, x86_THREAD_STATE32_COUNT);
         if(r) throw runtime_error("failed to set thread state");
+        #endif
     
         r = thread_resume(remote_thread);
         if(r) throw runtime_error("failed to resume thread");
