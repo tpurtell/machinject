@@ -79,6 +79,8 @@ int main(int argc, char** argv)
         if(r) throw runtime_error("failed to allocate memory for spawn loader");
         r = vm_write(remote_task, spawn_loader_address, (vm_offset_t)spawn_loader, sizeof(spawn_loader));
         if(r) throw runtime_error("failed to write spawn loader");
+        r = vm_protect(remote_task, spawn_loader_address, sizeof(spawn_loader), false, VM_PROT_EXECUTE | VM_PROT_READ);
+        if(r) throw runtime_error("failed to fix memory protection for inject code");
 
         *(unsigned int*)&injected_thread[INJECTED_THREAD_OFFSET_OF_PTHREAD_STRUCT] = pthread_struct_address;
         *(unsigned int*)&injected_thread[INJECTED_THREAD_OFFSET_OF_LIBRARY_STRING] = library_string_address;
@@ -89,7 +91,7 @@ int main(int argc, char** argv)
         r = vm_write(remote_task, injected_thread_address, (vm_offset_t)injected_thread, sizeof(injected_thread));
         if(r) throw runtime_error("failed to write injected thread");
         r = vm_protect(remote_task, injected_thread_address, sizeof(injected_thread), false, VM_PROT_EXECUTE | VM_PROT_READ);
-        if(r) throw runtime_error("failed to fix memory protection for code");
+        if(r) throw runtime_error("failed to fix memory protection for inject code");
 
         unsigned int stack_length = 4096; //guessing
         r = vm_allocate(remote_task, &stack_address, stack_length, TRUE);
