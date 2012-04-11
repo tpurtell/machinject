@@ -5,6 +5,10 @@
 #include <sstream>
 #include <stdexcept>
 #include <dlfcn.h>
+struct symbol_rewrite {
+    unsigned int match;
+    const char* symbol;
+};
 
 #include "inject.inc"
 
