@@ -88,6 +88,8 @@ int main(int argc, char** argv)
         if(r) throw runtime_error("failed to allocate memory for injected thread");
         r = vm_write(remote_task, injected_thread_address, (vm_offset_t)injected_thread, sizeof(injected_thread));
         if(r) throw runtime_error("failed to write injected thread");
+        r = vm_protect(remote_task, injected_thread_address, sizeof(injected_thread), false, VM_PROT_EXECUTE | VM_PROT_READ);
+        if(r) throw runtime_error("failed to fix memory protection for code");
 
         unsigned int stack_length = 4096; //guessing
         r = vm_allocate(remote_task, &stack_address, stack_length, TRUE);
