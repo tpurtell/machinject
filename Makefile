@@ -12,8 +12,8 @@ inject.inc: generate_inject
 inject: inject.cpp inject.inc
 	$(CXX) inject.cpp -o inject
 
-library.dylib: library.m library.cpp
-	$(CXX) library.m library.cpp -o library.dylib -dynamiclib -lobjc -framework Foundation
+library.dylib: library.cpp
+	$(CXX) library.cpp -o library.dylib -dynamiclib
 
 trace.dylib: trace.m 
 	$(CXX) trace.m -o trace.dylib -dynamiclib -lobjc -framework Foundation
