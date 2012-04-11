@@ -5,6 +5,12 @@
 #include <iomanip>
 #include <vector>
 
+#ifdef __LP64__
+typedef unsigned long long              pointer_as_int;
+#else
+typedef unsigned int                    pointer_as_int;
+#endif
+
 extern "C" void __pthread_set_self(void*);
 typedef void* (*thread_func)(void*);
 #ifdef TEST_LOCALLY
@@ -42,7 +48,6 @@ typedef int (*pfn_pthread_attr_setschedparam)(pthread_attr_t *attr, const struct
 typedef void (*pfn_pthread_exit)(void* data);
 
 #ifdef __LP64__
-typedef unsigned long long              pointer_as_int;
 #define MACH_THREAD_SELF                ((pfn_mach_thread_self)0x0101010101010101LL)
 #define THREAD_TERMINATE                ((pfn_thread_terminate)0x0202020202020202LL)
 #define PTHREAD_SET_SELF                ((pfn_pthread_set_self)0x0303030303030303LL)
@@ -61,7 +66,6 @@ typedef unsigned long long              pointer_as_int;
 #define LIBRARY_STRING                  ((char*)0xf1f1f1f1f1f1f1f1LL)    
 #define LOADER_FUNCTION                 ((thread_func)0xf2f2f2f2f2f2f2f2LL)
 #else
-typedef unsigned int                    pointer_as_int;
 #define MACH_THREAD_SELF                ((pfn_mach_thread_self)0x01010101)
 #define THREAD_TERMINATE                ((pfn_thread_terminate)0x02020202)
 #define PTHREAD_SET_SELF                ((pfn_pthread_set_self)0x03030303)
@@ -103,7 +107,7 @@ void injected_thread() {
 	PTHREAD_ATTR_SETSCHEDPARAM( &attr, &sched );
 	
 	pthread_t thread;
-    PTHREAD_CREATE( &thread, &attr, LOADER_FUNCTION, LIBRARY_STRING);
+	    PTHREAD_CREATE( &thread, &attr, LOADER_FUNCTION, LIBRARY_STRING);
 	PTHREAD_ATTR_DESTROY(&attr);
     THREAD_TERMINATE(MACH_THREAD_SELF());
     asm volatile (".byte 0xFF; .byte 0xFF; .byte 0xFF; .byte 0xFF");
@@ -111,13 +115,15 @@ void injected_thread() {
 using namespace std;
 pointer_as_int find_pointer(vector<unsigned char>& data, pointer_as_int find)
 {
+	//assumes nothing will be at ofs 0
     if(data.size() < sizeof(pointer_as_int))
-        return ~(pointer_as_int)0;
+        return 0;
     for(vector<unsigned char>::iterator i = data.begin(); i != data.end(); i++)
     {
         if(*(pointer_as_int*)&*i == find)
             return i - data.begin();
     }
+	return 0;
 }
 
 void print_symbol_rewrites(const char* table_name)
