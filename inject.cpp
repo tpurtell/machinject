@@ -83,11 +83,11 @@ int main(int argc, char** argv)
         if(r) throw runtime_error("failed to fix memory protection for inject code");
 
 		if(INJECTED_THREAD_OFFSET_OF_PTHREAD_STRUCT)
-        	*(unsigned int*)&injected_thread[INJECTED_THREAD_OFFSET_OF_PTHREAD_STRUCT] = pthread_struct_address;
+        	*(pointer_as_int*)&injected_thread[INJECTED_THREAD_OFFSET_OF_PTHREAD_STRUCT] = pthread_struct_address;
 		if(INJECTED_THREAD_OFFSET_OF_LIBRARY_STRING)
-        	*(unsigned int*)&injected_thread[INJECTED_THREAD_OFFSET_OF_LIBRARY_STRING] = library_string_address;
+        	*(pointer_as_int*)&injected_thread[INJECTED_THREAD_OFFSET_OF_LIBRARY_STRING] = library_string_address;
 		if(INJECTED_THREAD_OFFSET_OF_LOADER_FUNCTION)
-        	*(unsigned int*)&injected_thread[INJECTED_THREAD_OFFSET_OF_LOADER_FUNCTION] = spawn_loader_address;
+        	*(pointer_as_int*)&injected_thread[INJECTED_THREAD_OFFSET_OF_LOADER_FUNCTION] = spawn_loader_address;
 
         r = vm_allocate(remote_task, &injected_thread_address, sizeof(injected_thread), TRUE);
         if(r) throw runtime_error("failed to allocate memory for injected thread");
@@ -96,7 +96,7 @@ int main(int argc, char** argv)
         r = vm_protect(remote_task, injected_thread_address, sizeof(injected_thread), false, VM_PROT_EXECUTE | VM_PROT_READ);
         if(r) throw runtime_error("failed to fix memory protection for inject code");
 
-        unsigned int stack_length = 4096; //guessing
+        unsigned int stack_length = 32768;
         r = vm_allocate(remote_task, &stack_address, stack_length, TRUE);
         if(r) throw runtime_error("failed to allocate memory for stack");
         // r = vm_write(remote_task, stack_address, (vm_offset_t), stack_length);
